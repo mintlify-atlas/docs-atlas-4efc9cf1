@@ -1,0 +1,62 @@
+{
+  "projectType": "saas",
+  "projectName": "ElectroHome",
+  "projectDescription": "A Django-based e-commerce platform for electronics and home appliances with Wompi payment integration, Google OAuth authentication, and cloud media storage.",
+  "theme": "almond",
+  "primaryColor": "#1A73E8",
+  "lightColor": "#E8F0FE",
+  "darkColor": "#0D47A1",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/product-catalog",
+              "features/shopping-cart",
+              "features/payments",
+              "features/authentication"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment-variables",
+              "configuration/settings"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/overview",
+              "deployment/render"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Product catalog for electronics and home appliances",
+    "Shopping cart and order management",
+    "Wompi payment gateway integration",
+    "Google OAuth social authentication",
+    "Cloudinary cloud media storage",
+    "WhiteNoise static file serving",
+    "Django admin panel",
+    "Secure production configuration with HTTPS enforcement"
+  ],
+  "publicApiSurface": [
+    "GET /admin/ - Django admin interface",
+    "Google OAuth social login",
+    "Wompi payment webhook handler",
+    "manage.py - Django management commands",
+    "build.sh - Production build script"
+  ]
+}
