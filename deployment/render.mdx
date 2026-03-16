@@ -1,0 +1,232 @@
+---
+title: Deploy to Render
+description: Step-by-step guide to deploy ElectroHome to Render, including database setup, environment variables, Google OAuth, and Wompi configuration.
+keywords: ['render', 'deployment', 'django', 'postgresql', 'gunicorn', 'google oauth', 'wompi']
+---
+
+This guide walks you through deploying ElectroHome to [Render](https://render.com) from your GitHub repository. By the end you will have a running production instance at a `*.onrender.com` URL with HTTPS, a managed PostgreSQL database, and all integrations configured.
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- A [Render account](https://render.com) (free tier works for initial deployment)
+- Your ElectroHome repository pushed to GitHub
+- A Cloudinary account with an existing cloud
+- Gmail credentials for transactional email (or another SMTP provider)
+- Wompi API keys (sandbox keys are fine to start)
+- A Google Cloud project with OAuth 2.0 credentials (required for Google sign-in)
+
+<Steps>
+
+  <Step title="Create a PostgreSQL database on Render">
+    1. Log in to the [Render dashboard](https://dashboard.render.com).
+    2. Click **New** and select **PostgreSQL**.
+    3. Give it a name such as `electrohome-db`.
+    4. Choose a region close to your users.
+    5. Select the **Free** plan or a paid plan depending on your needs.
+    6. Click **Create Database**.
+
+    Once provisioned, Render shows the database's **Internal Database URL**. Copy it — you will use it as the `DATABASE_URL` environment variable in the next steps.
+
+    <Note>
+      Use the **Internal Database URL** (not the external one) when both your web service and database are on Render. This routes traffic over Render's private network and avoids data transfer costs.
+    </Note>
+  </Step>
+
+  <Step title="Create a web service">
+    1. In the Render dashboard, click **New** and select **Web Service**.
+    2. Connect your GitHub account if you have not already, then select your ElectroHome repository.
+    3. Click **Connect**.
+  </Step>
+
+  <Step title="Configure the web service">
+    On the service configuration screen, set the following:
+
+    | Field | Value |
+    |---|---|
+    | **Name** | `electrohome` (or any name you prefer) |
+    | **Region** | Same region as your PostgreSQL database |
+    | **Branch** | `main` (or your production branch) |
+    | **Runtime** | `Python 3` |
+    | **Build command** | `./build.sh` |
+    | **Start command** | `gunicorn electrohome.wsgi:application` |
+
+    <Warning>
+      Make sure `build.sh` is executable in your repository. If it is not, run `git update-index --chmod=+x build.sh && git commit -m "Make build.sh executable" && git push` before deploying.
+    </Warning>
+  </Step>
+
+  <Step title="Set environment variables">
+    Scroll down to the **Environment** section and add the following variables. You can add them one at a time or paste them in bulk using the **Add from .env** option.
+
+    <Warning>
+      Never commit secret values to your repository. Set all secrets directly in the Render dashboard.
+    </Warning>
+
+    **Django core**
+
+    | Variable | Value |
+    |---|---|
+    | `DJANGO_SETTINGS_MODULE` | `electrohome.settings.production` |
+    | `SECRET_KEY` | A long random string — see the tip below for how to generate one |
+    | `ALLOWED_HOSTS` | `your-app.onrender.com` |
+    | `CSRF_TRUSTED_ORIGINS` | `https://your-app.onrender.com` |
+
+    <Tip>
+      Generate a secure `SECRET_KEY` with Python:
+      ```bash
+      python -c "import secrets; print(secrets.token_urlsafe(50))"
+      ```
+    </Tip>
+
+    **Database**
+
+    | Variable | Value |
+    |---|---|
+    | `DATABASE_URL` | The Internal Database URL from your Render PostgreSQL instance |
+
+    **Email (Gmail SMTP)**
+
+    | Variable | Value |
+    |---|---|
+    | `EMAIL_HOST_USER` | Your Gmail address, e.g. `store@gmail.com` |
+    | `EMAIL_HOST_PASSWORD` | A Gmail [App Password](https://support.google.com/accounts/answer/185833) (not your account password) |
+
+    <Note>
+      Gmail requires an App Password when two-factor authentication is enabled. Generate one at **Google Account → Security → 2-Step Verification → App passwords**.
+    </Note>
+
+    **Cloudinary**
+
+    | Variable | Value |
+    |---|---|
+    | `CLOUDINARY_CLOUD_NAME` | Your Cloudinary cloud name |
+    | `CLOUDINARY_API_KEY` | Your Cloudinary API key |
+    | `CLOUDINARY_API_SECRET` | Your Cloudinary API secret |
+
+    **Wompi payments**
+
+    | Variable | Value |
+    |---|---|
+    | `WOMPI_PUBLIC_KEY` | Your Wompi public key |
+    | `WOMPI_PRIVATE_KEY` | Your Wompi private key |
+    | `WOMPI_ENVIRONMENT` | `test` for sandbox, `production` for live payments |
+
+    You can find these keys in the [Wompi merchant dashboard](https://comercios.wompi.co).
+  </Step>
+
+  <Step title="Configure ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS">
+    Render assigns your service a URL in the format `https://your-app.onrender.com`. You must allow this domain in both settings to prevent Django from rejecting requests.
+
+    Set the variables to your actual Render URL:
+
+    ```
+    ALLOWED_HOSTS=your-app.onrender.com
+    CSRF_TRUSTED_ORIGINS=https://your-app.onrender.com
+    ```
+
+    If you add a custom domain later, append it with a comma:
+
+    ```
+    ALLOWED_HOSTS=your-app.onrender.com,www.yourdomain.com
+    CSRF_TRUSTED_ORIGINS=https://your-app.onrender.com,https://www.yourdomain.com
+    ```
+
+    <Note>
+      `ALLOWED_HOSTS` does not include the `https://` prefix. `CSRF_TRUSTED_ORIGINS` requires the full URL including the scheme.
+    </Note>
+  </Step>
+
+  <Step title="Deploy and verify">
+    1. Click **Create Web Service**. Render queues a build immediately.
+    2. Open the **Logs** tab to watch the build. You should see output from each step in `build.sh`: dependency install, static file collection, migrations, and Site configuration.
+    3. Once the build finishes and the service status shows **Live**, open your Render URL in a browser.
+    4. Navigate to `/admin/` and log in with your superuser credentials to confirm the admin panel loads correctly.
+
+    <Check>
+      If the home page loads over HTTPS and the admin panel is accessible, the core deployment is working.
+    </Check>
+
+    If the build fails, check the logs for the specific error. Common issues:
+
+    - **`build.sh: Permission denied`** — the script is not executable; see step 3.
+    - **`django.db.utils.OperationalError`** — `DATABASE_URL` is missing or incorrect.
+    - **`ImproperlyConfigured: The SECRET_KEY setting must not be empty`** — `SECRET_KEY` env var is not set.
+  </Step>
+
+  <Step title="Configure Google OAuth callback URLs">
+    Google OAuth requires you to register the production callback URL in the Google Cloud Console.
+
+    1. Go to the [Google Cloud Console](https://console.cloud.google.com) and open your project.
+    2. Navigate to **APIs & Services → Credentials**.
+    3. Click on your OAuth 2.0 Client ID.
+    4. Under **Authorized redirect URIs**, add:
+
+       ```
+       https://your-app.onrender.com/accounts/google/login/callback/
+       ```
+
+    5. Click **Save**.
+
+    Then, update the social application record in the Django admin:
+
+    1. Open `/admin/socialaccount/socialapp/` on your production site.
+    2. Click on the **Google** social app.
+    3. Make sure the **Sites** field includes your production site (the one with `domain = your-app.onrender.com`).
+    4. Save.
+
+    <Warning>
+      If the production site is not linked to the Google social app in the admin, Google sign-in will fail with a `SocialApp matching query does not exist` error.
+    </Warning>
+  </Step>
+
+  <Step title="Switch Wompi to production mode">
+    By default, `WOMPI_ENVIRONMENT` is set to `test`, which routes payments through the Wompi sandbox. When you are ready to accept real payments:
+
+    1. Log in to the [Wompi merchant dashboard](https://comercios.wompi.co) and retrieve your **production** public and private keys. These are different from your sandbox keys.
+    2. In the Render dashboard, update the following environment variables:
+
+       | Variable | Value |
+       |---|---|
+       | `WOMPI_ENVIRONMENT` | `production` |
+       | `WOMPI_PUBLIC_KEY` | Your production public key |
+       | `WOMPI_PRIVATE_KEY` | Your production private key |
+
+    3. Save the changes. Render will automatically redeploy the service.
+
+    <Warning>
+      `WOMPI_API_URL` is hardcoded to the sandbox URL (`https://sandbox.wompi.co/v1`) in `production.py`. When switching to production payments, also update `WOMPI_API_URL` to the live endpoint or move it to an environment variable.
+    </Warning>
+
+    <Tip>
+      Test the full checkout flow in sandbox mode before switching to production to avoid issues with real customer payments.
+    </Tip>
+  </Step>
+
+</Steps>
+
+## Redeploying after changes
+
+Render automatically triggers a new deploy when you push to the configured branch. Each deploy runs `build.sh` in full, so migrations and static file collection always stay up to date.
+
+To trigger a manual redeploy without a code change, click **Manual Deploy → Deploy latest commit** in the Render dashboard.
+
+## Viewing logs
+
+Use the **Logs** tab on your Render service to view real-time output from Gunicorn and your Django application. Filter by keyword (e.g., `ERROR` or `WARNING`) to find issues quickly.
+
+<Note>
+  Render's free tier services spin down after 15 minutes of inactivity. The first request after a cold start may take 30–60 seconds. Upgrade to a paid plan to keep the service always on.
+</Note>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Deployment overview" icon="map" href="/deployment/overview">
+    Understand the full production architecture and build process.
+  </Card>
+  <Card title="Environment variables" icon="key" href="/configuration/environment-variables">
+    Complete reference for all environment variables used by ElectroHome.
+  </Card>
+</CardGroup>

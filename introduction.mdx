@@ -1,0 +1,82 @@
+---
+title: Introduction
+description: Welcome to ElectroHome — a Django-based e-commerce platform for electronics and home appliances.
+---
+
+# Welcome to ElectroHome
+
+ElectroHome is a full-featured e-commerce platform built with Django, designed for selling electronics and home appliances. It provides a complete online shopping experience with secure payments, user authentication, and cloud-based media management.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get your local development environment running in minutes
+  </Card>
+  <Card title="Product Catalog" icon="store" href="/features/product-catalog">
+    Manage your electronics and home appliance listings
+  </Card>
+  <Card title="Payments" icon="credit-card" href="/features/payments">
+    Accept payments securely with Wompi integration
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/deployment/overview">
+    Deploy to Render with a production-ready configuration
+  </Card>
+</CardGroup>
+
+## What is ElectroHome?
+
+ElectroHome is a production-ready Django e-commerce application deployed at [ecommerce-electrohome-render.onrender.com](https://ecommerce-electrohome-render.onrender.com). It is built for retailers who need a reliable, scalable online store for electronics and home appliances.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Product catalog" icon="list">
+    Browse and manage electronics and home appliance listings with image upload via Cloudinary
+  </Card>
+  <Card title="Shopping cart" icon="cart-shopping">
+    Full cart and order management workflow for customers
+  </Card>
+  <Card title="Wompi payments" icon="money-bill">
+    Secure payment processing through the Wompi gateway (Colombia)
+  </Card>
+  <Card title="Google OAuth" icon="google">
+    One-click sign-in with Google via django-allauth social authentication
+  </Card>
+  <Card title="Cloud media" icon="image">
+    Product images stored and served via Cloudinary CDN
+  </Card>
+  <Card title="Django admin" icon="shield">
+    Full-featured admin panel for store management at `/admin/`
+  </Card>
+  <Card title="Secure by default" icon="lock">
+    HTTPS enforcement, CSRF protection, and secure cookie configuration in production
+  </Card>
+  <Card title="Static file serving" icon="files">
+    Optimized static asset delivery using WhiteNoise
+  </Card>
+</CardGroup>
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend framework | Django 5.2 |
+| Database | PostgreSQL (production), SQLite (development) |
+| Authentication | django-allauth with Google OAuth |
+| Payments | Wompi payment gateway |
+| Media storage | Cloudinary |
+| Static files | WhiteNoise |
+| Deployment | Render |
+
+## Next steps
+
+<Steps>
+  <Step title="Set up your environment">
+    Follow the [Quickstart guide](/quickstart) to get ElectroHome running locally.
+  </Step>
+  <Step title="Configure integrations">
+    Set up your [environment variables](/configuration/environment-variables) for payments, media, and authentication.
+  </Step>
+  <Step title="Deploy to production">
+    Use the [Render deployment guide](/deployment/render) to launch your store.
+  </Step>
+</Steps>

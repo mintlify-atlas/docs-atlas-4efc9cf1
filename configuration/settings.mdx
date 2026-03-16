@@ -1,0 +1,217 @@
+---
+title: 'Django settings'
+description: 'Overview of the ElectroHome settings module structure, development vs. production configuration, and key settings explained.'
+keywords: ['django settings', 'configuration', 'production', 'development', 'security']
+---
+
+ElectroHome uses a split settings structure to keep development and production configuration separate. This page explains how the modules are organized, which settings are active in each environment, and what each key setting does.
+
+## Settings module structure
+
+The project contains two settings locations:
+
+<Tree>
+  <Tree.Folder name="electrohome" defaultOpen>
+    <Tree.File name="settings.py" />
+    <Tree.Folder name="Settings" defaultOpen>
+      <Tree.File name="base.py" />
+      <Tree.File name="production.py" />
+      <Tree.File name="local.py" />
+      <Tree.File name="prod.py" />
+    </Tree.Folder>
+  </Tree.Folder>
+</Tree>
+
+| File | Purpose |
+|---|---|
+| `electrohome/settings.py` | Development settings. Used by default when no `DJANGO_SETTINGS_MODULE` is set. |
+| `electrohome/Settings/base.py` | Shared base settings imported by production and local modules. |
+| `electrohome/Settings/production.py` | Full production configuration. Imports from `base.py` and overrides or extends every setting needed for live deployment. |
+| `electrohome/Settings/local.py` | Local developer overrides. Currently empty — add machine-specific settings here. |
+| `electrohome/Settings/prod.py` | Additional prod overrides. Currently empty. |
+
+## Selecting the settings module
+
+Django reads the `DJANGO_SETTINGS_MODULE` environment variable to determine which settings file to load.
+
+<Tabs>
+  <Tab title="Environment variable">
+    ```bash
+    export DJANGO_SETTINGS_MODULE=electrohome.Settings.production
+    python manage.py runserver
+    ```
+  </Tab>
+  <Tab title="--settings flag">
+    ```bash
+    python manage.py migrate --settings=electrohome.Settings.production
+    python manage.py collectstatic --settings=electrohome.Settings.production
+    ```
+  </Tab>
+  <Tab title="gunicorn">
+    ```bash
+    gunicorn electrohome.wsgi:application \
+      --env DJANGO_SETTINGS_MODULE=electrohome.Settings.production
+    ```
+  </Tab>
+</Tabs>
+
+When `DJANGO_SETTINGS_MODULE` is not set, Django falls back to the value in `manage.py` and `wsgi.py`, which defaults to `electrohome.settings` (the development module).
+
+## Development settings
+
+The development settings in `electrohome/settings.py` are optimized for a fast local feedback loop.
+
+<AccordionGroup>
+  <Accordion title="Database — SQLite">
+    ```python
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+    ```
+
+    SQLite stores the entire database in a single file (`db.sqlite3`) at the project root. No database server is required. This file is typically listed in `.gitignore` and should not be committed.
+  </Accordion>
+  <Accordion title="Debug mode">
+    ```python
+    DEBUG = True
+    ```
+
+    When `DEBUG` is `True`, Django displays a detailed error page with a full stack trace whenever an exception occurs. All SQL queries are also logged in memory. Never run with `DEBUG = True` in production — it leaks internal information to anyone who triggers an error.
+  </Accordion>
+  <Accordion title="Allowed hosts">
+    ```python
+    ALLOWED_HOSTS = []
+    ```
+
+    An empty list is valid when `DEBUG = True` — Django automatically allows `localhost` and `127.0.0.1`.
+  </Accordion>
+  <Accordion title="Static files">
+    ```python
+    STATIC_URL = 'static/'
+    ```
+
+    Django's development server serves static files automatically. No additional configuration is needed.
+  </Accordion>
+</AccordionGroup>
+
+## Production settings
+
+The production settings module (`electrohome/Settings/production.py`) imports everything from `base.py` with `from .base import *`, then overrides or adds production-specific values.
+
+### Database — PostgreSQL
+
+```python
+import dj_database_url
+
+DATABASES = {
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL'),
+        conn_max_age=600
+    )
+}
+```
+
+`dj_database_url` parses the `DATABASE_URL` environment variable into a Django `DATABASES` dictionary. The `conn_max_age=600` setting keeps each database connection alive for up to 10 minutes, reducing the overhead of opening a new connection on every request.
+
+### Security settings
+
+Production enforces HTTPS and protects session and CSRF cookies.
+
+```python
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+```
+
+| Setting | Effect |
+|---|---|
+| `CSRF_COOKIE_SECURE` | Instructs the browser to send the CSRF cookie only over HTTPS connections. |
+| `SESSION_COOKIE_SECURE` | Instructs the browser to send the session cookie only over HTTPS connections. |
+| `SECURE_SSL_REDIRECT` | Redirects all HTTP requests to HTTPS automatically. |
+| `SECURE_PROXY_SSL_HEADER` | Tells Django to trust the `X-Forwarded-Proto: https` header set by a reverse proxy (such as nginx or a load balancer) to detect that the original request was made over HTTPS. |
+
+<Warning>
+Do not set `SECURE_PROXY_SSL_HEADER` unless your server sits behind a proxy that sets this header. If an untrusted client can send `X-Forwarded-Proto`, it could bypass the SSL check.
+</Warning>
+
+### Cache configuration
+
+```python
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
+```
+
+The production settings use `LocMemCache`, which stores cached data in Python process memory. This works well for a single-process deployment. If you run multiple worker processes or pods, each process maintains its own independent cache — they do not share data. For shared caching across multiple workers, replace `LocMemCache` with a Redis or Memcached backend.
+
+### Static files with WhiteNoise
+
+```python
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+```
+
+WhiteNoise serves static files (CSS, JavaScript, fonts) directly from the Django/Gunicorn process without requiring a separate web server or CDN for basic deployments. The `CompressedStaticFilesStorage` backend pre-compresses files with gzip and brotli at `collectstatic` time, reducing transfer sizes.
+
+Before deploying or after changing static files, run:
+
+```bash
+python manage.py collectstatic --settings=electrohome.Settings.production
+```
+
+### Media files with Cloudinary
+
+```python
+INSTALLED_APPS += ['cloudinary_storage', 'cloudinary']
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME'),
+    'API_KEY': os.environ.get('CLOUDINARY_API_KEY'),
+    'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET'),
+}
+```
+
+All user-uploaded media (product images, etc.) are stored in Cloudinary instead of the local filesystem. This keeps the production server stateless — uploads persist independently of deployments or server restarts.
+
+Cloudinary credentials are read from environment variables. See [Environment variables](/configuration/environment-variables) for the full list.
+
+### Google OAuth
+
+Production enforces HTTPS for OAuth callbacks and enables automatic sign-up for new users authenticating through Google.
+
+```python
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
+SOCIALACCOUNT_QUERY_EMAIL = True
+SOCIALACCOUNT_EMAIL_REQUIRED = True
+SOCIALACCOUNT_AUTO_SIGNUP = True
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+```
+
+Email verification is disabled (`'none'`) because Google already verifies the user's email address during the OAuth flow.
+
+## Running management commands with a specific settings module
+
+You can pass `--settings` to any Django management command to target a specific environment without changing `DJANGO_SETTINGS_MODULE`.
+
+```bash
+# Apply migrations on production database
+python manage.py migrate --settings=electrohome.Settings.production
+
+# Open a Django shell with production settings
+python manage.py shell --settings=electrohome.Settings.production
+
+# Create a superuser in the production database
+python manage.py createsuperuser --settings=electrohome.Settings.production
+
+# Collect static files for production
+python manage.py collectstatic --no-input --settings=electrohome.Settings.production
+```
+
+<Tip>
+In a CI/CD pipeline or on a production server, set `DJANGO_SETTINGS_MODULE` as a persistent environment variable rather than passing `--settings` to every command. This reduces the chance of accidentally running a command against the wrong settings module.
+</Tip>

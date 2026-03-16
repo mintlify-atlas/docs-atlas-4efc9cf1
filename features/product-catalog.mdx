@@ -1,0 +1,125 @@
+---
+title: Product catalog
+description: Manage and browse electronics and home appliance listings with Django admin and Cloudinary image storage.
+keywords: ['product catalog', 'django admin', 'cloudinary', 'electronics', 'home appliances']
+---
+
+The product catalog is the core of your ElectroHome store. Admins manage all product listings through the Django admin panel, while customers browse and filter products on the storefront. Product images are stored and delivered via Cloudinary CDN for fast, reliable media serving.
+
+## How the catalog works
+
+<Columns cols={3}>
+  <Card title="Admin management" icon="shield">
+    Add, edit, and delete products from the Django admin panel at `/admin/`
+  </Card>
+  <Card title="Cloud image storage" icon="image">
+    Product images upload directly to Cloudinary and are served via CDN
+  </Card>
+  <Card title="Customer browsing" icon="store">
+    Customers browse products by category and filter listings on the storefront
+  </Card>
+</Columns>
+
+## Managing products in Django admin
+
+All product management happens in the Django admin panel. You need superuser or staff access to manage listings.
+
+### Adding a product
+
+<Steps>
+  <Step title="Open the admin panel">
+    Navigate to `/admin/` and sign in with your staff credentials.
+  </Step>
+  <Step title="Go to Products">
+    In the admin sidebar, click **Products** under your store app section.
+  </Step>
+  <Step title="Create a new product">
+    Click **Add product** in the top-right corner of the product list.
+  </Step>
+  <Step title="Fill in product details">
+    Enter the product name, description, price, category, and stock quantity. All required fields are marked in the form.
+  </Step>
+  <Step title="Upload a product image">
+    Click the image upload field and select an image file from your computer. The image uploads to Cloudinary automatically when you save.
+  </Step>
+  <Step title="Save the product">
+    Click **Save** to publish the product to your store. It will appear immediately in the storefront catalog.
+  </Step>
+</Steps>
+
+### Editing a product
+
+From the product list in `/admin/`, click the product name to open its detail form. Update any fields and click **Save**. If you upload a new image, the old Cloudinary asset is replaced.
+
+### Deleting a product
+
+Select the checkbox next to one or more products in the list, choose **Delete selected products** from the **Action** dropdown, and click **Go**. Confirm the deletion in the next screen.
+
+<Warning>
+Deleting a product removes it from the catalog permanently. If the product is referenced in existing orders, consider marking it inactive rather than deleting it to preserve order history.
+</Warning>
+
+## Product image workflow with Cloudinary
+
+ElectroHome uses Cloudinary as its media storage backend. When you upload an image through the Django admin, the file is sent to your Cloudinary account and a URL is stored in the database. Images are served directly from Cloudinary's CDN — your server never handles image delivery.
+
+```python
+# Cloudinary is configured as the default file storage
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME'),
+    'API_KEY': os.environ.get('CLOUDINARY_API_KEY'),
+    'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET'),
+}
+```
+
+<Note>
+You must set the `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` environment variables before uploading images. See the [environment variables guide](/configuration/environment-variables) for details.
+</Note>
+
+**Supported image formats:** JPEG, PNG, WebP, and GIF. Cloudinary automatically optimizes and resizes images for web delivery.
+
+## Product categories and filtering
+
+Products are organized into categories (for example, Televisions, Refrigerators, Washing Machines, Laptops). Categories let customers narrow down listings on the storefront without browsing the full catalog.
+
+### Managing categories
+
+You manage categories in the Django admin panel under **Categories**. Each product belongs to one category. To add a new category:
+
+<Steps>
+  <Step title="Open the admin panel">
+    Go to `/admin/` and navigate to **Categories**.
+  </Step>
+  <Step title="Add a category">
+    Click **Add category**, enter a name and optional description, then click **Save**.
+  </Step>
+  <Step title="Assign products">
+    Open a product and select the new category from the **Category** dropdown.
+  </Step>
+</Steps>
+
+### How customers browse
+
+On the storefront, customers can:
+
+- View all products on the main catalog page
+- Click a category to filter listings by product type
+- View a product detail page with full description, price, and image
+- Add a product to their cart directly from the catalog or detail page
+
+<Tip>
+Keep product names and descriptions clear and specific (for example, "Samsung 55" 4K QLED TV" rather than just "TV"). This helps customers find what they need and improves search results.
+</Tip>
+
+## Related pages
+
+<Columns cols={2}>
+  <Card title="Shopping cart" icon="cart-shopping" href="/features/shopping-cart">
+    How customers add products to cart and place orders
+  </Card>
+  <Card title="Environment variables" icon="key" href="/configuration/environment-variables">
+    Configure your Cloudinary credentials
+  </Card>
+</Columns>

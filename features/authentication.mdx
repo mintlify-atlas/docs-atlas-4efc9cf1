@@ -1,0 +1,202 @@
+---
+title: Authentication
+description: Configure email/password and Google OAuth authentication using django-allauth, including Google Cloud setup, SITE_ID, and security settings.
+keywords: ['authentication', 'google oauth', 'django-allauth', 'login', 'social auth', 'SITE_ID']
+---
+
+ElectroHome supports two authentication methods: standard email and password registration, and one-click sign-in with Google via OAuth. Authentication is powered by [django-allauth](https://allauth.org), which handles user registration, login, social accounts, and session management.
+
+## Authentication options
+
+<Columns cols={2}>
+  <Card title="Email and password" icon="envelope">
+    Standard registration and login with an email address and password
+  </Card>
+  <Card title="Google OAuth" icon="google">
+    One-click sign-in using an existing Google account — no password required
+  </Card>
+</Columns>
+
+## User registration and login flows
+
+### Email and password
+
+<Steps>
+  <Step title="Register">
+    The customer fills in the registration form with their name, email address, and password. Because `ACCOUNT_EMAIL_VERIFICATION` is set to `'none'`, the account is activated immediately without requiring an email confirmation step.
+  </Step>
+  <Step title="Log in">
+    The customer enters their email and password on the login page. A session is created and they are redirected to the store.
+  </Step>
+  <Step title="Log out">
+    The customer clicks **Log out** in the navigation bar to end their session.
+  </Step>
+</Steps>
+
+### Google OAuth
+
+<Steps>
+  <Step title="Click 'Sign in with Google'">
+    The customer clicks **Sign in with Google** on the login page. Because `SOCIALACCOUNT_LOGIN_ON_GET` is `True`, the OAuth redirect starts immediately without an extra confirmation screen.
+  </Step>
+  <Step title="Google account selection">
+    The customer selects their Google account and grants permission to share their profile and email address.
+  </Step>
+  <Step title="Account created or linked">
+    If no account exists for the Google email, one is created automatically (`SOCIALACCOUNT_AUTO_SIGNUP=True`). If an account already exists, the Google account is linked to it.
+  </Step>
+  <Step title="Redirect to store">
+    The customer is redirected back to the store, now logged in.
+  </Step>
+</Steps>
+
+## Setting up Google OAuth
+
+Before Google sign-in works, you need to create OAuth credentials in Google Cloud and register them in the Django admin.
+
+### Creating Google OAuth credentials
+
+<Steps>
+  <Step title="Create a Google Cloud project">
+    Go to the [Google Cloud Console](https://console.cloud.google.com) and create a new project (or select an existing one).
+  </Step>
+  <Step title="Enable the Google+ API">
+    In **APIs & Services** > **Library**, search for **Google People API** and enable it.
+  </Step>
+  <Step title="Configure the OAuth consent screen">
+    Go to **APIs & Services** > **OAuth consent screen**. Choose **External**, fill in the application name, support email, and authorized domain (your production domain). Add `email` and `profile` to the scopes.
+  </Step>
+  <Step title="Create OAuth 2.0 credentials">
+    Go to **APIs & Services** > **Credentials** and click **Create credentials** > **OAuth client ID**. Select **Web application**.
+  </Step>
+  <Step title="Add authorized redirect URIs">
+    Add the following redirect URI for each environment:
+
+    <CodeGroup>
+
+    ```text Production
+    https://yourdomain.com/accounts/google/login/callback/
+    ```
+
+    ```text Local development
+    http://localhost:8000/accounts/google/login/callback/
+    ```
+
+    </CodeGroup>
+  </Step>
+  <Step title="Copy your credentials">
+    Copy the **Client ID** and **Client secret** from the credentials detail screen.
+  </Step>
+</Steps>
+
+### Registering credentials in Django admin
+
+<Steps>
+  <Step title="Open the admin panel">
+    Navigate to `/admin/` and sign in with your superuser account.
+  </Step>
+  <Step title="Set the correct site">
+    Go to **Sites** and update the default site to match your domain (for example, `yourdomain.com`). This is required because allauth uses Django's Sites framework to build callback URLs. Set `SITE_ID` in your settings to match the primary key of this site record.
+  </Step>
+  <Step title="Add a social application">
+    Go to **Social applications** and click **Add social application**.
+  </Step>
+  <Step title="Fill in the application details">
+    - **Provider:** Google
+    - **Name:** Google (or any label you prefer)
+    - **Client ID:** Paste your Google Client ID
+    - **Secret key:** Paste your Google Client secret
+    - **Sites:** Move your site from **Available sites** to **Chosen sites**
+  </Step>
+  <Step title="Save">
+    Click **Save**. Google sign-in is now active.
+  </Step>
+</Steps>
+
+## django-allauth configuration
+
+The key allauth settings are configured in `settings.py`:
+
+```python
+# Force HTTPS for all OAuth redirects in production
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
+
+# Request email from Google during OAuth
+SOCIALACCOUNT_QUERY_EMAIL = True
+SOCIALACCOUNT_EMAIL_REQUIRED = True
+
+# Store OAuth tokens for potential future API use
+SOCIALACCOUNT_STORE_TOKENS = True
+
+# Skip the intermediate confirmation screen on OAuth redirect
+SOCIALACCOUNT_LOGIN_ON_GET = True
+
+# Create an account automatically if none exists for the OAuth email
+SOCIALACCOUNT_AUTO_SIGNUP = True
+
+# Skip email verification for both standard and social sign-up
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+SOCIALACCOUNT_EMAIL_VERIFICATION = 'none'
+
+# Google OAuth scopes
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        }
+    }
+}
+```
+
+### Key settings explained
+
+| Setting | Value | Effect |
+|---------|-------|--------|
+| `ACCOUNT_DEFAULT_HTTP_PROTOCOL` | `"https"` | All OAuth callback URLs use HTTPS, preventing token interception |
+| `SOCIALACCOUNT_AUTO_SIGNUP` | `True` | New users are registered automatically on first Google sign-in |
+| `ACCOUNT_EMAIL_VERIFICATION` | `'none'` | Users are not required to verify their email address before accessing the store |
+| `SOCIALACCOUNT_LOGIN_ON_GET` | `True` | The OAuth flow starts immediately on GET, skipping the confirmation prompt |
+| `SOCIALACCOUNT_STORE_TOKENS` | `True` | OAuth access tokens are stored in the database for the session |
+
+## Django Sites framework
+
+django-allauth depends on Django's Sites framework to construct absolute URLs for OAuth callbacks. The `SITE_ID` setting tells allauth which site record to use.
+
+```python
+# settings.py
+SITE_ID = 1
+
+INSTALLED_APPS = [
+    ...
+    'django.contrib.sites',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
+    ...
+]
+```
+
+<Warning>
+If `SITE_ID` points to a site record whose domain does not match your actual domain, Google's OAuth redirect will fail with a redirect URI mismatch error. Always verify the **Sites** entry in `/admin/` after deploying to a new domain.
+</Warning>
+
+## Security settings
+
+`ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"` ensures that allauth always generates `https://` callback URLs. This prevents OAuth tokens from being sent over unencrypted connections.
+
+<Note>
+In local development, you may need to temporarily set this to `"http"` if you are not running a local TLS terminator. Restore it to `"https"` before deploying to production.
+</Note>
+
+## Related pages
+
+<Columns cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Set up your local development environment
+  </Card>
+  <Card title="Environment variables" icon="key" href="/configuration/environment-variables">
+    Configure SITE_ID and other deployment settings
+  </Card>
+</Columns>

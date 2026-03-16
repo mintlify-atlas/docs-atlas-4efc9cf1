@@ -1,0 +1,155 @@
+---
+title: 'Environment variables'
+description: 'Complete reference for all environment variables used by ElectroHome in production.'
+keywords: ['environment variables', 'configuration', 'secrets', 'production', 'env']
+---
+
+ElectroHome reads its runtime configuration from environment variables. This page lists every variable the application reads, its purpose, and whether it is required.
+
+<Warning>
+Never commit `.env` files or hardcoded secrets to version control. Treat all keys and passwords as sensitive credentials and rotate them immediately if they are exposed.
+</Warning>
+
+<Note>
+All variables on this page apply to the **production** settings module (`electrohome.Settings.production`). Development uses `electrohome/settings.py`, which relies on hardcoded defaults and does not read most of these variables.
+</Note>
+
+## Application
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SECRET_KEY` | Yes | — | Django secret key used for cryptographic signing. Must be a long, random, unique string in production. |
+| `DJANGO_SETTINGS_MODULE` | Yes | `electrohome.settings` | Dotted path to the settings module. Set to `electrohome.Settings.production` in production. |
+| `ALLOWED_HOSTS` | No | `*` | Comma-separated list of hostnames that Django will serve. Example: `electrohome.com,www.electrohome.com`. |
+| `CSRF_TRUSTED_ORIGINS` | No | `` (empty) | Comma-separated list of trusted origins for CSRF protection. Example: `https://electrohome.com`. |
+| `DEBUG` | No | `False` (production default) | Set to `True` only in development. Never enable in production. |
+
+<ParamField path="SECRET_KEY" type="string" required>
+  Django's cryptographic signing key. Generate a value with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`.
+</ParamField>
+
+<ParamField path="DJANGO_SETTINGS_MODULE" type="string" required>
+  Dotted path to the active settings module. Must be set before Django starts.
+</ParamField>
+
+<ParamField path="ALLOWED_HOSTS" type="string" default="*">
+  Comma-separated hostnames. In production, set this to your actual domain(s) to prevent HTTP Host header attacks.
+</ParamField>
+
+<ParamField path="CSRF_TRUSTED_ORIGINS" type="string" default="">
+  Comma-separated origins (scheme + host) allowed to make cross-site requests. Required when `CSRF_COOKIE_SECURE` is enabled.
+</ParamField>
+
+## Database
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | Yes | — | Full database connection URL parsed by `dj-database-url`. |
+
+<ParamField path="DATABASE_URL" type="string" required>
+  PostgreSQL connection string in URL format. Example: `postgres://user:password@host:5432/electrohome`.
+</ParamField>
+
+The connection pool uses a `conn_max_age` of 600 seconds (10 minutes), which keeps database connections alive across requests to reduce overhead.
+
+## Email
+
+ElectroHome sends transactional email through Gmail SMTP over SSL (port 465).
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `EMAIL_HOST_USER` | Yes | `` (empty) | Gmail address used as the SMTP login and the default sender. |
+| `EMAIL_HOST_PASSWORD` | Yes | `` (empty) | Gmail app password for the SMTP account. Do not use your regular Gmail password — generate an app-specific password in your Google account security settings. |
+
+<ParamField path="EMAIL_HOST_USER" type="string" required>
+  Gmail address used for SMTP authentication. Example: `noreply@electrohome.com`.
+</ParamField>
+
+<ParamField path="EMAIL_HOST_PASSWORD" type="string" required>
+  App password generated in Google account settings. Regular Gmail passwords will not work when two-factor authentication is enabled.
+</ParamField>
+
+<Tip>
+Create a dedicated Gmail account for transactional email rather than using a personal account. This makes it easier to manage sending limits and rotate credentials.
+</Tip>
+
+## Wompi payments
+
+ElectroHome integrates with [Wompi](https://wompi.co) for payment processing. The application defaults to the sandbox environment.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `WOMPI_PUBLIC_KEY` | Yes | `` (empty) | Wompi publishable key used in client-side payment flows. |
+| `WOMPI_PRIVATE_KEY` | Yes | `` (empty) | Wompi secret key used for server-side API calls. Never expose this in client-side code. |
+| `WOMPI_ENVIRONMENT` | No | `test` | Set to `production` to process live payments. Any other value routes to the sandbox. |
+
+<ParamField path="WOMPI_PUBLIC_KEY" type="string" required>
+  Publishable key from the Wompi dashboard. Example: `pub_test_xxxxxxxxxxxxxxxxxxxxxxxx`.
+</ParamField>
+
+<ParamField path="WOMPI_PRIVATE_KEY" type="string" required>
+  Secret key from the Wompi dashboard. Example: `prv_test_xxxxxxxxxxxxxxxxxxxxxxxx`.
+</ParamField>
+
+<ParamField path="WOMPI_ENVIRONMENT" type="string" default="test">
+  Controls which Wompi environment is active. Set to `production` for live payments.
+</ParamField>
+
+<Warning>
+Do not use production Wompi keys in a staging or development environment. Keep test and production key pairs separate.
+</Warning>
+
+## Cloudinary
+
+ElectroHome uses Cloudinary for media file storage (product images and uploads).
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `CLOUDINARY_CLOUD_NAME` | Yes | — | Your Cloudinary cloud name, visible in the Cloudinary dashboard. |
+| `CLOUDINARY_API_KEY` | Yes | — | Cloudinary API key for authenticated requests. |
+| `CLOUDINARY_API_SECRET` | Yes | — | Cloudinary API secret. Keep this server-side only. |
+
+<ParamField path="CLOUDINARY_CLOUD_NAME" type="string" required>
+  Cloud name from your Cloudinary account. Example: `my-electrohome-cloud`.
+</ParamField>
+
+<ParamField path="CLOUDINARY_API_KEY" type="string" required>
+  API key found in the Cloudinary dashboard under **Settings → Access Keys**.
+</ParamField>
+
+<ParamField path="CLOUDINARY_API_SECRET" type="string" required>
+  API secret paired with `CLOUDINARY_API_KEY`. Never expose this in client-side code or public repositories.
+</ParamField>
+
+## Example `.env` file
+
+The following snippet shows all variables together. Copy it to a `.env` file at the project root and fill in your actual values. Add `.env` to `.gitignore` before committing.
+
+```bash .env
+# Application
+SECRET_KEY=replace-with-a-long-random-secret-key
+DJANGO_SETTINGS_MODULE=electrohome.Settings.production
+ALLOWED_HOSTS=electrohome.com,www.electrohome.com
+CSRF_TRUSTED_ORIGINS=https://electrohome.com,https://www.electrohome.com
+
+# Database
+DATABASE_URL=postgres://dbuser:dbpassword@localhost:5432/electrohome
+
+# Email
+EMAIL_HOST_USER=noreply@electrohome.com
+EMAIL_HOST_PASSWORD=your-gmail-app-password
+
+# Wompi payments
+WOMPI_PUBLIC_KEY=pub_test_xxxxxxxxxxxxxxxxxxxxxxxx
+WOMPI_PRIVATE_KEY=prv_test_xxxxxxxxxxxxxxxxxxxxxxxx
+WOMPI_ENVIRONMENT=test
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME=my-electrohome-cloud
+CLOUDINARY_API_KEY=123456789012345
+CLOUDINARY_API_SECRET=your-cloudinary-api-secret
+```
+
+<Note>
+Add `.env` to your `.gitignore` file to prevent accidental commits. In production, inject variables through your hosting platform's environment configuration rather than a `.env` file.
+</Note>

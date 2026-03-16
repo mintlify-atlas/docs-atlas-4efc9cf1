@@ -1,0 +1,138 @@
+---
+title: Deployment overview
+description: How ElectroHome is built and deployed to production on Render using Django, PostgreSQL, Cloudinary, and WhiteNoise.
+keywords: ['deployment', 'render', 'django', 'production', 'cloudinary', 'whitenoise', 'postgresql']
+---
+
+ElectroHome runs on [Render](https://render.com) as a Django web service backed by a managed PostgreSQL database. Static files are served directly from the app using WhiteNoise, and user-uploaded media is stored in Cloudinary. The entire build process is automated through a single shell script.
+
+## Architecture overview
+
+<Columns cols={3}>
+  <Card title="Web service" icon="server">
+    Django 5.2 running on Render's managed infrastructure, served by Gunicorn over HTTPS.
+  </Card>
+  <Card title="Database" icon="database">
+    Render-managed PostgreSQL instance. The `DATABASE_URL` is injected automatically at runtime.
+  </Card>
+  <Card title="Media storage" icon="image">
+    Product images and uploads stored on Cloudinary CDN via `django-cloudinary-storage`.
+  </Card>
+  <Card title="Static files" icon="files">
+    CSS, JS, and other static assets served directly by Django using WhiteNoise with gzip compression.
+  </Card>
+  <Card title="Email" icon="envelope">
+    Transactional email sent through Gmail's SMTP server on port 465 with SSL.
+  </Card>
+  <Card title="Payments" icon="credit-card">
+    Wompi payment gateway integration, configurable for sandbox or production mode.
+  </Card>
+</Columns>
+
+## Production tech stack
+
+| Layer | Technology | Notes |
+|---|---|---|
+| Framework | Django 5.2 | `electrohome.settings.production` settings module |
+| Web server | Gunicorn | WSGI server, started by Render's start command |
+| Database | PostgreSQL | Managed by Render, connected via `DATABASE_URL` |
+| Static files | WhiteNoise | `CompressedStaticFilesStorage` for gzip + caching |
+| Media storage | Cloudinary | Replaces local `MEDIA_ROOT` in production |
+| Email | Gmail SMTP | SSL on port 465, credentials via environment variables |
+| Authentication | django-allauth | Google OAuth with HTTPS-only callback URLs |
+| Payments | Wompi | Sandbox or production via `WOMPI_ENVIRONMENT` |
+| Hosting | Render | Web service + PostgreSQL add-on |
+
+## Build process
+
+Every deploy runs `build.sh` from the repository root. Render executes this script before starting the web service.
+
+```bash build.sh
+#!/usr/bin/env bash
+set -o errexit
+
+echo "Instalando dependencias..."
+pip install -r requirements.txt
+
+echo "Recolectando archivos estáticos..."
+python manage.py collectstatic --no-input --settings=electrohome.settings.production
+
+echo "Aplicando migraciones..."
+python manage.py migrate --settings=electrohome.settings.production
+
+echo "Configurando Site domain..."
+python manage.py shell --settings=electrohome.settings.production -c "
+from django.contrib.sites.models import Site
+site, _ = Site.objects.get_or_create(id=7)
+site.domain = 'ecommerce-electrohome-render.onrender.com'
+site.name = 'ElectroHome'
+site.save()
+print('Site configurado:', site.domain)
+"
+
+echo "Build completado exitosamente."
+```
+
+The script runs four steps in sequence:
+
+<Steps>
+  <Step title="Install dependencies">
+    Installs all Python packages from `requirements.txt` using pip. Because Render uses ephemeral build environments, every deploy performs a fresh install.
+  </Step>
+  <Step title="Collect static files">
+    Runs `collectstatic` to copy all static assets into the directory WhiteNoise serves from. The `--no-input` flag prevents interactive prompts during CI.
+  </Step>
+  <Step title="Apply database migrations">
+    Runs any pending Django migrations against the production PostgreSQL database. New tables, schema changes, and data migrations are applied here.
+  </Step>
+  <Step title="Configure the Django Sites framework">
+    Uses a management shell command to set the `Site` record with `id=7` to the live Render domain. This is required for django-allauth to generate correct OAuth callback URLs and for the `SITE_ID` setting to resolve to the right domain.
+  </Step>
+</Steps>
+
+<Warning>
+  The build script modifies the database on every deploy. If `SITE_ID` in `production.py` does not match the `id` used in `build.sh`, OAuth callbacks and other site-dependent features will point to the wrong domain.
+</Warning>
+
+## Django Sites framework
+
+ElectroHome uses Django's `django.contrib.sites` framework. The production settings set `SITE_ID = 4`, but the build script creates or updates the `Site` record with `id=7` and sets its domain to `ecommerce-electrohome-render.onrender.com`.
+
+<Note>
+  If you fork this project and deploy it to a different Render domain, update the `site.domain` value in `build.sh` and ensure `SITE_ID` in `production.py` matches the correct database row.
+</Note>
+
+## Security measures in production
+
+The `electrohome/settings/production.py` module enables the following security settings automatically when `DJANGO_SETTINGS_MODULE` is set to `electrohome.settings.production`:
+
+| Setting | Value | Effect |
+|---|---|---|
+| `DEBUG` | `False` | Disables the debug toolbar and detailed error pages |
+| `SECURE_SSL_REDIRECT` | `True` | Redirects all HTTP requests to HTTPS |
+| `CSRF_COOKIE_SECURE` | `True` | CSRF cookie is only sent over HTTPS |
+| `SESSION_COOKIE_SECURE` | `True` | Session cookie is only sent over HTTPS |
+| `SECURE_PROXY_SSL_HEADER` | `HTTP_X_FORWARDED_PROTO` | Trusts Render's SSL termination proxy |
+| `CSRF_TRUSTED_ORIGINS` | Set via env var | Restricts CSRF validation to your domain |
+
+<Tip>
+  You do not need to configure these settings manually — they are all active as soon as you set `DJANGO_SETTINGS_MODULE=electrohome.settings.production` in your Render environment.
+</Tip>
+
+## Environment variables
+
+Production requires a set of environment variables for the database, email, media storage, payments, and security. See the [environment variables reference](/configuration/environment-variables) for the full list with descriptions.
+
+Key groups of variables:
+
+- **Django core** — `SECRET_KEY`, `DJANGO_SETTINGS_MODULE`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`
+- **Database** — `DATABASE_URL` (provided automatically by Render PostgreSQL)
+- **Email** — `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`
+- **Cloudinary** — `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+- **Wompi** — `WOMPI_PUBLIC_KEY`, `WOMPI_PRIVATE_KEY`, `WOMPI_ENVIRONMENT`
+
+## Next steps
+
+<Card title="Deploy to Render" icon="cloud" href="/deployment/render">
+  Follow the step-by-step guide to create your Render web service, configure all environment variables, and go live.
+</Card>
